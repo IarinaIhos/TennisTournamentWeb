@@ -1,49 +1,23 @@
-package com.example.tennis.model;
+package com.example.tennis.dto;
 
-import jakarta.persistence.*;
+
+import com.example.tennis.model.Tournament;
+import com.example.tennis.model.User;
+
 import java.time.LocalDateTime;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-
-@Entity
-public class Match {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class MatchDTO {
     private Long id;
-
-    @ManyToOne
-    @JoinColumn(name = "tournament_id")
-    @JsonIgnoreProperties({"registrations", "matches"})
     private Tournament tournament;
-
-    @ManyToOne
-    @JoinColumn(name = "player1_id")
-    @JsonIgnoreProperties({"password", "role", "email", "phoneNumber", "location"})
     private User player1;
-
-    @ManyToOne
-    @JoinColumn(name = "player2_id")
-    @JsonIgnoreProperties({"password", "role", "email", "phoneNumber", "location"})
     private User player2;
-
-    @ManyToOne
-    @JoinColumn(name = "winner_id")
-    @JsonIgnoreProperties({"password", "role", "email", "phoneNumber", "location"})
     private User winner;
-
-    @ManyToOne
-    @JoinColumn(name = "referee_id")
-    @JsonIgnoreProperties({"password", "role", "email", "phoneNumber", "location"})
     private User referee;
-
     private Integer player1Points;
     private Integer player2Points;
-
-    private String refferee = "refferee";
     private LocalDateTime matchDate;
 
-    // Getters & Setters
+    // Getters and setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -59,6 +33,9 @@ public class Match {
     public User getWinner() { return winner; }
     public void setWinner(User winner) { this.winner = winner; }
 
+    public User getReferee() { return referee; }
+    public void setReferee(User referee) { this.referee = referee; }
+
     public Integer getPlayer1Points() { return player1Points; }
     public void setPlayer1Points(Integer player1Points) { this.player1Points = player1Points; }
 
@@ -67,13 +44,4 @@ public class Match {
 
     public LocalDateTime getMatchDate() { return matchDate; }
     public void setMatchDate(LocalDateTime matchDate) { this.matchDate = matchDate; }
-
-    public User getReferee() {
-        return referee;
-    }
-    public void setReferee(User referee) {
-            this.referee = referee;
-        }
-
-    }
-
+}

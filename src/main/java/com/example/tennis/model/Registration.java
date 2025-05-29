@@ -22,7 +22,7 @@ public class Registration {
     private Status status;
 
     public enum Status {
-        PENDING, APPROVED, DENIED
+        PENDING, APPROVED, REJECTED
     }
 
     // Getters and setters

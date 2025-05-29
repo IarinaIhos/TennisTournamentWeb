@@ -27,6 +27,8 @@ public class Tournament {
         private List<Match> matches;
 
         // Getters and setters
+        public Tournament() {
+        }
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
         public String getName() { return name; }
@@ -39,4 +41,12 @@ public class Tournament {
         public void setLocation(String location) { this.location = location; }
         public List<Match> getMatches() { return matches; }
         public void setMatches(List<Match> matches) { this.matches = matches; }
+
+        public Tournament(String name, String location, LocalDate startDate, LocalDate endDate) {
+                this.name = name;
+                this.location = location;
+                this.startDate = startDate;
+                this.endDate = endDate;
+        }
+
 }

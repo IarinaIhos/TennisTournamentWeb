@@ -1,5 +1,6 @@
 package com.example.tennis.service;
 
+import com.example.tennis.dto.MatchDTO;
 import com.example.tennis.model.Match;
 import com.example.tennis.model.User;
 import com.example.tennis.repository.MatchRepository;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class MatchService {
@@ -25,12 +27,10 @@ public class MatchService {
                 .toList();
     }
 
-    public List<Match> getRefereeMatches(Long refereeId) {
-        return matchRepository.findAll().stream()
-                .filter(m -> m.getReferee() != null && m.getReferee().getId().equals(refereeId))
-                .toList();
+    public List<MatchDTO> getRefereeMatches(Long refereeId) {
+        List<Match> matches = matchRepository.findByRefereeId(refereeId);
+        return matches.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
-
     public Match updateMatchScore(Long id, String score, Long winnerId) {
         Optional<Match> matchOpt = matchRepository.findById(id);
         if (!matchOpt.isPresent()) {
@@ -86,5 +86,61 @@ public class MatchService {
             }
         }
         return content.toString();
+    }
+
+    public List<Match> getAllMatches() {
+        return matchRepository.findAll();
+    }
+
+    public Match assignReferee(Long matchId, Long refereeId) {
+        // Validate match existence
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Match not found with ID: " + matchId));
+
+        // Validate referee existence and role
+        User referee = userRepository.findById(refereeId)
+                .orElseThrow(() -> new IllegalArgumentException("Referee not found with ID: " + refereeId));
+        if (!"referee".equalsIgnoreCase(referee.getRole())) {
+            throw new IllegalArgumentException("User with ID " + refereeId + " is not a referee");
+        }
+
+        // Assign referee to match
+        match.setReferee(referee);
+
+        // Save and return updated match
+        return matchRepository.save(match);
+    }
+
+    private MatchDTO convertToDTO(Match match) {
+        MatchDTO dto = new MatchDTO();
+        dto.setId(match.getId());
+        dto.setTournament(match.getTournament());
+        dto.setMatchDate(match.getMatchDate());
+        dto.setPlayer1Points(match.getPlayer1Points());
+        dto.setPlayer2Points(match.getPlayer2Points());
+
+        // Fetch full user details
+        if (match.getPlayer1() != null) {
+            User fullPlayer1 = userRepository.findById(match.getPlayer1().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Player1 not found with ID: " + match.getPlayer1().getId()));
+            dto.setPlayer1(fullPlayer1);
+        }
+        if (match.getPlayer2() != null) {
+            User fullPlayer2 = userRepository.findById(match.getPlayer2().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Player2 not found with ID: " + match.getPlayer2().getId()));
+            dto.setPlayer2(fullPlayer2);
+        }
+        if (match.getWinner() != null) {
+            User fullWinner = userRepository.findById(match.getWinner().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Winner not found with ID: " + match.getWinner().getId()));
+            dto.setWinner(fullWinner);
+        }
+        if (match.getReferee() != null) {
+            User fullReferee = userRepository.findById(match.getReferee().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Referee not found with ID: " + match.getReferee().getId()));
+            dto.setReferee(fullReferee);
+        }
+
+        return dto;
     }
 }

@@ -6,8 +6,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface MatchRepository extends JpaRepository<Match, Long> {
+    List<Match> findByTournamentId(Long tournamentId);
+    List<Match> findByRefereeId(Long refereeId);
+
     @Query("SELECT COUNT(m) FROM Match m WHERE m.player1.id = :playerId OR m.player2.id = :playerId")
     int countMatchesByPlayer(@Param("playerId") Long playerId);
 

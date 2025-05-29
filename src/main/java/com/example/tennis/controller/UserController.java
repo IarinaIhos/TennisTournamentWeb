@@ -68,6 +68,11 @@ public class UserController {
         return userRepository.findByRole("player");
     }
 
+    @GetMapping("/referees")
+    public List<User> getAllReferees() {
+        return userRepository.findByRole("referee");
+    }
+
     @GetMapping("/players/stats")
     public List<PlayerStatusDTO> getPlayerStats() {
         List<User> players = userRepository.findByRole("player");

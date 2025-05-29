@@ -1,5 +1,6 @@
 package com.example.tennis.controller;
 
+import com.example.tennis.dto.MatchDTO;
 import com.example.tennis.model.Match;
 import com.example.tennis.service.MatchService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +23,7 @@ public class MatchController {
     }
 
     @GetMapping("/referee/{refereeId}")
-    public List<Match> getRefereeMatches(@PathVariable Long refereeId) {
+    public List<MatchDTO> getRefereeMatches(@PathVariable Long refereeId) {
         return matchService.getRefereeMatches(refereeId);
     }
 
@@ -46,8 +47,38 @@ public class MatchController {
                 .header("Content-Disposition", "attachment; filename=matches." + format)
                 .body(content);
     }
+
+    @GetMapping
+    public List<Match> getAllMatches() {
+        return matchService.getAllMatches();
+    }
+
+    // New endpoint to assign a referee to a match
+    @PostMapping("/{matchId}/assign-referee")
+    public ResponseEntity<?> assignReferee(@PathVariable Long matchId, @RequestBody RefereeAssignmentRequest request) {
+        try {
+            Match updatedMatch = matchService.assignReferee(matchId, request.getRefereeId());
+            return ResponseEntity.ok(updatedMatch);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }
 
+// Request class for referee assignment
+class RefereeAssignmentRequest {
+    private Long refereeId;
+
+    public Long getRefereeId() {
+        return refereeId;
+    }
+
+    public void setRefereeId(Long refereeId) {
+        this.refereeId = refereeId;
+    }
+}
+
+// Existing ScoreUpdateRequest class
 class ScoreUpdateRequest {
     private String score;
     private Long winnerId;
