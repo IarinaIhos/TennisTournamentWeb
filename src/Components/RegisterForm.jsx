@@ -81,7 +81,7 @@ function RegisterForm() {
       <select name="role" value={formData.role} onChange={handleChange} required className="form-input">
         <option value="">Select Role</option>
         <option value="player">Player</option>
-        <option value="refferee">Referee</option>
+        <option value="referee">Referee</option>
         <option value="admin">Admin</option>
       </select>
 

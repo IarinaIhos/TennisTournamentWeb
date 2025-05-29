@@ -7,6 +7,7 @@ function Dashboard() {
       <h1>Welcome to the Tennis Tournament App! 🎾</h1>
       <p>You have successfully logged in or registered.</p>
     </div>
+    
   );
 }
 

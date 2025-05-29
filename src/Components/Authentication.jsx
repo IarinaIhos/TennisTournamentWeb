@@ -9,9 +9,21 @@ function Authentication() {
 
   useEffect(() => {
     const role = localStorage.getItem('role');
-    if (role === 'admin') window.location.href = '/admin';
-    else if (role === 'refferee') window.location.href = '/referee';
-    else if (role === 'player') window.location.href = '/player';
+    if (role ) {
+      switch(role){
+        case 'admin':
+          window.location.href = '/admin';
+          break;
+        case 'player':
+          window.location.href = '/player';
+          break;      
+        case 'referee':
+          window.location.href = '/referee';
+          break;
+        default:    
+          break;
+      }
+    }
   }, []);
 
   if (!mode) {

@@ -24,9 +24,9 @@ function LoginForm() {
         localStorage.setItem('userId', data.userId);
         localStorage.setItem('role', data.role);
         localStorage.setItem('fullName', data.fullName);
-
+        
         if (data.role === 'admin') navigate('/admin');
-        else if (data.role === 'refferee') navigate('/referee');
+        else if (data.role === 'referee') navigate('/referee');
         else navigate('/player');
       } else {
         alert('Login failed!');
@@ -44,7 +44,7 @@ function LoginForm() {
       <select value={role} onChange={(e) => setRole(e.target.value)} required>
         <option value="">Select Role</option>
         <option value="player">Player</option>
-        <option value="refferee">Referee</option>
+        <option value="referee">Referee</option>
         <option value="admin">Admin</option>
       </select>
 

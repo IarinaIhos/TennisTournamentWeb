@@ -18,7 +18,6 @@ function App() {
         <Route path="/admin" element={role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />} />
         <Route path="/player" element={role === 'player' ? <PlayerDashboard /> : <Navigate to="/" />} />
         <Route path="/referee" element={role === 'referee' ? <RefereeDashboard /> : <Navigate to="/" />} />
-
         <Route path="/logout" element={<Logout />} />
       </Routes>
     </Router>
