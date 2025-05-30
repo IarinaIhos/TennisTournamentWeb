@@ -8,13 +8,13 @@ import com.example.tennis.repository.RegistrationRepository;
 import com.example.tennis.repository.TournamentRepository;
 import com.example.tennis.repository.UserRepository;
 import com.example.tennis.repository.MatchRepository;
+import com.example.tennis.service.TournamentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/tournaments")
@@ -33,75 +33,89 @@ public class TournamentController {
     @Autowired
     private MatchRepository matchRepository;
 
+    @Autowired
+    private TournamentService tournamentService;
+
     @GetMapping
     public List<Tournament> getAllTournaments() {
-        return tournamentRepository.findAll();
+        return tournamentService.getAllTournaments();
     }
+
     @GetMapping("/{id}/participants")
     public ResponseEntity<?> getParticipants(@PathVariable Long id) {
-        List<Registration> regs = registrationRepository.findByTournamentId(id);
-        List<User> participants = regs.stream().map(Registration::getPlayer).toList();
-
+        List<User> participants = tournamentService.getTournamentParticipants(id);
         return ResponseEntity.ok(participants);
     }
 
-
     @PostMapping("/{tournamentId}/register")
-    public ResponseEntity<?> registerToTournament(
-            @PathVariable Long tournamentId,
-            @RequestBody Map<String, Object> body
-    ) {
-        Long playerId = Long.parseLong(body.get("playerId").toString());
-
-        Optional<User> player = userRepository.findById(playerId);
-        Optional<Tournament> tournament = tournamentRepository.findById(tournamentId);
-
-        if (player.isEmpty() || tournament.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("message", "Player or tournament not found."));
+    public ResponseEntity<?> registerToTournament(@PathVariable Long tournamentId, @RequestBody RegistrationRequest request) {
+        try {
+            Registration registration = tournamentService.registerPlayer(tournamentId, request.getPlayerId());
+            return ResponseEntity.ok(Map.of("message", "Registered successfully.", "registration", registration));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
         }
+    }
 
-        Optional<Registration> existing = registrationRepository.findByPlayerIdAndTournamentId(playerId, tournamentId);
-        if (existing.isPresent()) {
-            return ResponseEntity.status(409).body(Map.of("message", "Player already registered."));
+    @GetMapping("/registrations/pending")
+    public ResponseEntity<?> getPendingRegistrations() {
+        List<Registration> pendingRegistrations = tournamentService.getPendingRegistrations();
+        return ResponseEntity.ok(pendingRegistrations);
+    }
+
+    @PostMapping("/registrations/{registrationId}/approve")
+    public ResponseEntity<?> approveRegistration(@PathVariable Long registrationId) {
+        try {
+            Registration registration = tournamentService.approveRegistration(registrationId);
+            return ResponseEntity.ok(Map.of("message", "Registration approved successfully.", "registration", registration));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
         }
+    }
 
-        Registration reg = new Registration();
-        reg.setPlayer(player.get());
-        reg.setTournament(tournament.get());
-        reg.setStatus(Registration.Status.PENDING); // sau Status.APPROVED dacă nu ai flow de aprobare
+    @PostMapping("/registrations/{registrationId}/reject")
+    public ResponseEntity<?> rejectRegistration(@PathVariable Long registrationId) {
+        try {
+            Registration registration = tournamentService.rejectRegistration(registrationId);
+            return ResponseEntity.ok(Map.of("message", "Registration rejected successfully.", "registration", registration));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
+        }
+    }
 
-        registrationRepository.save(reg);
-
-        return ResponseEntity.ok(Map.of("message", "Registered successfully."));
+    @GetMapping("/registrations")
+    public ResponseEntity<?> getPlayerRegistrations(@RequestParam Long playerId) {
+        List<Registration> registrations = tournamentService.getPlayerRegistrations(playerId);
+        return ResponseEntity.ok(registrations);
     }
 
     @GetMapping("/{id}/matches")
     public List<Match> getMatchesForTournament(@PathVariable Long id) {
         return matchRepository.findByTournamentId(id);
     }
+
     @PostMapping("/{id}/generate-matches")
     public ResponseEntity<?> generateMatches(@PathVariable Long id) {
-        List<Registration> registrations = registrationRepository.findByTournamentId(id);
+        List<User> participants = tournamentService.getTournamentParticipants(id);
 
-        if (registrations.size() < 2) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Not enough players to generate matches."));
+        if (participants.size() < 2) {
+            return ResponseEntity.status(400).body(Map.of("message", "Not enough approved players to generate matches."));
         }
 
-        Tournament tournament = tournamentRepository.findById(id).orElse(null);
-        if (tournament == null) {
-            return ResponseEntity.status(404).body(Map.of("message", "Tournament not found"));
-        }
+        Tournament tournament = tournamentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Tournament not found"));
 
-        List<User> players = registrations.stream()
-                .map(Registration::getPlayer)
-                .toList();
+        // Clear existing matches to avoid duplicates
+        List<Match> existingMatches = matchRepository.findByTournamentId(id);
+        matchRepository.deleteAll(existingMatches);
 
-        for (int i = 0; i < players.size(); i++) {
-            for (int j = i + 1; j < players.size(); j++) {
+        // Generate pairwise matches
+        for (int i = 0; i < participants.size(); i++) {
+            for (int j = i + 1; j < participants.size(); j++) {
                 Match match = new Match();
                 match.setTournament(tournament);
-                match.setPlayer1(players.get(i));
-                match.setPlayer2(players.get(j));
+                match.setPlayer1(participants.get(i));
+                match.setPlayer2(participants.get(j));
                 match.setPlayer1Points(0);
                 match.setPlayer2Points(0);
                 matchRepository.save(match);
@@ -110,7 +124,11 @@ public class TournamentController {
 
         return ResponseEntity.ok(Map.of("message", "Matches generated successfully."));
     }
-
-
 }
 
+class RegistrationRequest {
+    private Long playerId;
+
+    public Long getPlayerId() { return playerId; }
+    public void setPlayerId(Long playerId) { this.playerId = playerId; }
+}
