@@ -14,56 +14,91 @@ function AdminDashboard() {
   const [participants, setParticipants] = useState({});
   const [matches, setMatches] = useState({});
   const [referees, setReferees] = useState([]);
+  const [pendingRegistrations, setPendingRegistrations] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const fullName = localStorage.getItem('fullName') || 'Admin';
   const role = localStorage.getItem('role') || 'admin';
 
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch players
+      const playersRes = await fetch('http://localhost:8080/api/users/players');
+      if (!playersRes.ok) throw new Error('Failed to fetch players');
+      const playersData = await playersRes.json();
+      setUsers(playersData);
+
+      // Fetch referees
+      const refereesRes = await fetch('http://localhost:8080/api/users/referees');
+      if (!refereesRes.ok) throw new Error('Failed to fetch referees');
+      const refereesData = await refereesRes.json();
+      setReferees(refereesData);
+
+      // Fetch tournaments and their participants/matches
+      const tournamentsRes = await fetch('http://localhost:8080/api/tournaments');
+      if (!tournamentsRes.ok) throw new Error('Failed to fetch tournaments');
+      const tournamentsData = await tournamentsRes.json();
+      setTournaments(tournamentsData);
+
+      const participantsData = {};
+      const matchesData = {};
+      for (const t of tournamentsData) {
+        const participantsRes = await fetch(`http://localhost:8080/api/tournaments/${t.id}/participants`);
+        if (participantsRes.ok) {
+          const users = await participantsRes.json();
+          participantsData[t.id] = users;
+        }
+
+        const matchesRes = await fetch(`http://localhost:8080/api/tournaments/${t.id}/matches`);
+        if (matchesRes.ok) {
+          const matchList = await matchesRes.json();
+          matchesData[t.id] = matchList;
+        }
+      }
+      setParticipants(participantsData);
+      setMatches(matchesData);
+
+      // Fetch pending registrations
+      const pendingRes = await fetch('http://localhost:8080/api/tournaments/registrations/pending');
+      if (!pendingRes.ok) throw new Error('Failed to fetch pending registrations');
+      const pendingData = await pendingRes.json();
+      setPendingRegistrations(pendingData);
+    } catch (err) {
+      console.error(err);
+      alert('Error loading data: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Fetch players
-    fetch('http://localhost:8080/api/users/players')
-      .then(res => res.json())
-      .then(data => setUsers(data))
-      .catch(err => console.error(err));
-
-    // Fetch referees
-    fetch('http://localhost:8080/api/users/referees')
-      .then(res => res.json())
-      .then(data => setReferees(data))
-      .catch(err => console.error(err));
-
-    // Fetch tournaments and their participants/matches
-    fetch('http://localhost:8080/api/tournaments')
-      .then(res => res.json())
-      .then(data => {
-        setTournaments(data);
-        data.forEach(t => {
-          fetch(`http://localhost:8080/api/tournaments/${t.id}/participants`)
-            .then(res => res.json())
-            .then(users => {
-              setParticipants(prev => ({ ...prev, [t.id]: users }));
-            });
-
-          fetch(`http://localhost:8080/api/tournaments/${t.id}/matches`)
-            .then(res => res.json())
-            .then(matchList => {
-              setMatches(prev => ({ ...prev, [t.id]: matchList }));
-            });
-        });
-      });
+    fetchData();
   }, []);
 
   const handleGenerateMatches = async (tournamentId) => {
     try {
       const res = await fetch(`http://localhost:8080/api/tournaments/${tournamentId}/generate-matches`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
-      const isJson = res.headers.get('content-type')?.includes('application/json');
-      const data = isJson ? await res.json() : await res.text();
-      alert(data.message || 'Matches generated.');
-      window.location.reload();
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message || 'Matches generated.');
+        // Refresh matches
+        const matchesRes = await fetch(`http://localhost:8080/api/tournaments/${tournamentId}/matches`);
+        if (matchesRes.ok) {
+          const matchList = await matchesRes.json();
+          setMatches(prev => ({ ...prev, [tournamentId]: matchList }));
+        }
+      } else {
+        const error = await res.text();
+        alert(`Failed to generate matches: ${error || 'Unknown error'}`);
+      }
     } catch (err) {
       console.error(err);
-      alert('Failed to generate matches.');
+      alert('Error generating matches: ' + err.message);
     }
   };
 
@@ -76,7 +111,6 @@ function AdminDashboard() {
       });
       if (res.ok) {
         alert('Referee assigned successfully!');
-        // Update the match with the assigned referee
         setMatches(prev => ({
           ...prev,
           [tournamentId]: prev[tournamentId].map(m =>
@@ -84,12 +118,60 @@ function AdminDashboard() {
           ),
         }));
       } else {
-        const error = await res.json();
-        alert(`Failed to assign referee: ${error.message || 'Unknown error'}`);
+        const error = await res.text();
+        alert(`Failed to assign referee: ${error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error(err);
-      alert('Error assigning referee.');
+      alert('Error assigning referee: ' + err.message);
+    }
+  };
+
+  const handleApproveRegistration = async (registrationId, tournamentId) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/tournaments/registrations/${registrationId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message || 'Registration approved!');
+        // Remove from pending registrations
+        setPendingRegistrations(prev => prev.filter(reg => reg.id !== registrationId));
+        // Refresh participants
+        const participantsRes = await fetch(`http://localhost:8080/api/tournaments/${tournamentId}/participants`);
+        if (participantsRes.ok) {
+          const users = await participantsRes.json();
+          setParticipants(prev => ({ ...prev, [tournamentId]: users }));
+        }
+      } else {
+        const error = await res.text();
+        alert(`Failed to approve registration: ${error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error approving registration: ' + err.message);
+    }
+  };
+
+  const handleRejectRegistration = async (registrationId) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/tournaments/registrations/${registrationId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message || 'Registration rejected!');
+        // Remove from pending registrations
+        setPendingRegistrations(prev => prev.filter(reg => reg.id !== registrationId));
+      } else {
+        const error = await res.text();
+        alert(`Failed to reject registration: ${error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error rejecting registration: ' + err.message);
     }
   };
 
@@ -111,7 +193,7 @@ function AdminDashboard() {
       }
     } catch (err) {
       console.error(err);
-      alert('Error updating user.');
+      alert('Error updating user: ' + err.message);
     }
   };
 
@@ -130,12 +212,16 @@ function AdminDashboard() {
         }
       } catch (err) {
         console.error(err);
-        alert('Error deleting user.');
+        alert('Error deleting user: ' + err.message);
       }
     }
   };
 
   const renderContent = () => {
+    if (loading) {
+      return <div className="loading">Loading...</div>;
+    }
+
     switch (activeTab) {
       case 'players':
         return (
@@ -190,24 +276,24 @@ function AdminDashboard() {
             ) : (
               <div>
                 <h4>All Users</h4>
-                <table style={{ width: '100%', marginTop: '1rem', borderCollapse: 'collapse' }}>
+                <table className="dashboard-table">
                   <thead>
-                    <tr style={{ backgroundColor: '#f3f4f6' }}>
-                      <th style={{ padding: '10px' }}>Name</th>
-                      <th style={{ padding: '10px' }}>Email</th>
-                      <th style={{ padding: '10px' }}>Role</th>
-                      <th style={{ padding: '10px' }}>Actions</th>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.map(user => (
-                      <tr key={user.id} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td style={{ padding: '10px' }}>{user.fullName}</td>
-                        <td style={{ padding: '10px' }}>{user.email}</td>
-                        <td style={{ padding: '10px' }}>{user.role}</td>
-                        <td style={{ padding: '10px' }}>
+                      <tr key={user.id}>
+                        <td>{user.fullName}</td>
+                        <td>{user.email}</td>
+                        <td>{user.role}</td>
+                        <td>
                           <button onClick={() => setSelectedUser(user)}>Edit</button>
-                          <button onClick={() => handleDeleteUser(user.id)} style={{ marginLeft: '10px' }}>Delete</button>
+                          <button onClick={() => handleDeleteUser(user.id)} className="btn-danger">Delete</button>
                         </td>
                       </tr>
                     ))}
@@ -225,56 +311,145 @@ function AdminDashboard() {
         return <Scoreboard />;
       case 'tournamentParticipants':
         return (
-          <div>
-            <h3 style={{ marginBottom: '1rem' }}>🏟️ Tournaments & Registered Players</h3>
-            {tournaments.map(tournament => (
-              <div key={tournament.id} style={{ marginBottom: '2rem' }}>
-                <h4>{tournament.name} ({tournament.location})</h4>
-                <p><strong>{tournament.startDate}</strong> ➜ <strong>{tournament.endDate}</strong></p>
-                <button onClick={() => handleGenerateMatches(tournament.id)} style={{ marginBottom: '0.5rem' }}>
-                  Generate Matches
-                </button>
-                <ul style={{ paddingLeft: '1.5rem' }}>
-                  {participants[tournament.id]?.length > 0 ? (
-                    participants[tournament.id].map(player => (
-                      <li key={player.id}>
-                        {player.fullName} ({player.email})
-                      </li>
-                    ))
-                  ) : (
-                    <li>No participants yet</li>
-                  )}
-                </ul>
-                <h5 style={{ marginTop: '1rem' }}>🎾 Matches</h5>
-                <ul style={{ paddingLeft: '1.5rem' }}>
-                  {matches[tournament.id]?.length > 0 ? (
-                    matches[tournament.id].map(m => (
-                      <li key={m.id}>
-                        {m.player1.fullName} vs {m.player2.fullName} ➜ {m.winner ? `Winner: ${m.winner.fullName}` : 'Pending'}
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <label style={{ marginRight: '0.5rem' }}>Assign Referee:</label>
-                          <select
-                            onChange={(e) => handleAssignReferee(m.id, e.target.value, tournament.id)}
-                            value={m.referee?.id || ''}
-                            style={{ padding: '0.3rem', marginRight: '0.5rem' }}
+          <div className="tournaments-section">
+            <div className="section-header">
+              <h3>🏟️ Tournaments & Registered Players</h3>
+              <button onClick={fetchData} className="btn-refresh">🔄 Refresh</button>
+            </div>
+
+            {/* Pending Registrations Section */}
+            <div className="card">
+              <h4>Pending Registrations</h4>
+              {pendingRegistrations.length > 0 ? (
+                <table className="dashboard-table">
+                  <thead>
+                    <tr>
+                      <th>Player</th>
+                      <th>Tournament</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingRegistrations.map(reg => (
+                      <tr key={reg.id}>
+                        <td>{reg.player.fullName}</td>
+                        <td>{reg.tournament.name}</td>
+                        <td>
+                          <button
+                            onClick={() => handleApproveRegistration(reg.id, reg.tournament.id)}
+                            className="btn-success"
                           >
-                            <option value="">Select Referee</option>
-                            {referees.map(referee => (
-                              <option key={referee.id} value={referee.id}>
-                                {referee.fullName}
-                              </option>
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectRegistration(reg.id)}
+                            className="btn-danger"
+                          >
+                            Reject
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="empty-message">No pending registrations.</p>
+              )}
+            </div>
+
+            {/* Active Tournaments Section */}
+            <div className="card">
+              <h4>Active Tournaments</h4>
+              {tournaments.length > 0 ? (
+                tournaments.map(tournament => (
+                  <div key={tournament.id} className="tournament-card">
+                    <div className="tournament-header">
+                      <h5>{tournament.name} ({tournament.location})</h5>
+                      <p className="tournament-dates">
+                        <strong>{tournament.startDate}</strong> ➜ <strong>{tournament.endDate}</strong>
+                      </p>
+                      <button
+                        onClick={() => handleGenerateMatches(tournament.id)}
+                        className="btn-primary"
+                      >
+                        Generate Matches
+                      </button>
+                    </div>
+
+                    {/* Participants Table */}
+                    <div className="tournament-section">
+                      <h6>Accepted Participants</h6>
+                      {participants[tournament.id]?.length > 0 ? (
+                        <table className="dashboard-table">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Email</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {participants[tournament.id].map(player => (
+                              <tr key={player.id}>
+                                <td>{player.fullName}</td>
+                                <td>{player.email}</td>
+                              </tr>
                             ))}
-                          </select>
-                          <span>Current: {m.referee ? m.referee.fullName : 'None'}</span>
-                        </div>
-                      </li>
-                    ))
-                  ) : (
-                    <li>No matches yet</li>
-                  )}
-                </ul>
-              </div>
-            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="empty-message">No participants yet.</p>
+                      )}
+                    </div>
+
+                    {/* Matches Table */}
+                    <div className="tournament-section">
+                      <h6>Matches</h6>
+                      {matches[tournament.id]?.length > 0 ? (
+                        <table className="dashboard-table">
+                          <thead>
+                            <tr>
+                              <th>Player 1</th>
+                              <th>Player 2</th>
+                              <th>Winner</th>
+                              <th>Referee</th>
+                              <th>Assign Referee</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {matches[tournament.id].map(m => (
+                              <tr key={m.id}>
+                                <td>{m.player1?.fullName || 'TBD'}</td>
+                                <td>{m.player2?.fullName || 'TBD'}</td>
+                                <td>{m.winner ? m.winner.fullName : 'Pending'}</td>
+                                <td>{m.referee ? m.referee.fullName : 'None'}</td>
+                                <td>
+                                  <select
+                                    onChange={(e) => handleAssignReferee(m.id, e.target.value, tournament.id)}
+                                    value={m.referee?.id || ''}
+                                    className="referee-select"
+                                  >
+                                    <option value="">Select Referee</option>
+                                    {referees.map(referee => (
+                                      <option key={referee.id} value={referee.id}>
+                                        {referee.fullName}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="empty-message">No matches yet.</p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="empty-message">No tournaments available.</p>
+              )}
+            </div>
           </div>
         );
       case 'logout':
@@ -295,12 +470,24 @@ function AdminDashboard() {
       </header>
       <div className="admin-body">
         <aside className="admin-sidebar">
-          <button className={activeTab === 'players' ? 'active' : ''} onClick={() => setActiveTab('players')}>🧍 Player Score List</button>
-          <button className={activeTab === 'referees' ? 'active' : ''} onClick={() => setActiveTab('referees')}>🧑‍⚖️ Referees List</button>
-          <button className={activeTab === 'games' ? 'active' : ''} onClick={() => setActiveTab('games')}>🎮 Games</button>
-          <button className={activeTab === 'scoreboard' ? 'active' : ''} onClick={() => setActiveTab('scoreboard')}>🏆 Scoreboard</button>
-          <button className={activeTab === 'tournamentParticipants' ? 'active' : ''} onClick={() => setActiveTab('tournamentParticipants')}>🏟️ Tournaments & Players</button>
-          <button className={activeTab === 'logout' ? 'active' : ''} onClick={() => setActiveTab('logout')}>Logout</button>
+          <button className={activeTab === 'players' ? 'active' : ''} onClick={() => setActiveTab('players')}>
+            🧍 Player Score List
+          </button>
+          <button className={activeTab === 'referees' ? 'active' : ''} onClick={() => setActiveTab('referees')}>
+            🧑‍⚖️ Referees List
+          </button>
+          <button className={activeTab === 'games' ? 'active' : ''} onClick={() => setActiveTab('games')}>
+            🎮 Games
+          </button>
+          <button className={activeTab === 'scoreboard' ? 'active' : ''} onClick={() => setActiveTab('scoreboard')}>
+            🏆 Scoreboard
+          </button>
+          <button className={activeTab === 'tournamentParticipants' ? 'active' : ''} onClick={() => setActiveTab('tournamentParticipants')}>
+            🏟️ Tournaments & Players
+          </button>
+          <button className={activeTab === 'logout' ? 'active' : ''} onClick={() => setActiveTab('logout')}>
+            Logout
+          </button>
         </aside>
         <main className="admin-content">
           {renderContent()}
